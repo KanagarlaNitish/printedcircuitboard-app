@@ -1,12 +1,8 @@
 import streamlit as st
 import torch
 from PIL import Image
-import pathlib
 import pandas as pd
 import os
-
-# -------- WINDOWS FIX --------
-pathlib.PosixPath = pathlib.WindowsPath
 
 # -------- PAGE --------
 st.set_page_config(page_title="AI PCB Inspector", layout="wide")
@@ -30,48 +26,40 @@ option = st.sidebar.selectbox(
 uploaded_file = st.file_uploader("Upload PCB Image", type=["jpg","png","jpeg"])
 
 # =====================================
-# SIMPLE PREPROCESS (DON’T DISTURB IMAGE)
+# PREPROCESS
 # =====================================
 def preprocess_image(file):
     img = Image.open(file).convert("RGB")
     return img
 
 # =====================================
-# LOAD MODEL
+# LOAD MODEL (FIXED)
 # =====================================
 @st.cache_resource
-def load_model(path):
+def load_model(model_path):
 
-    if not os.path.exists(path):
-        st.error(f"❌ Model not found:\n{path}")
+    if not os.path.exists(model_path):
+        st.error(f"❌ Model not found: {model_path}")
         st.stop()
 
     model = torch.hub.load(
         "ultralytics/yolov5",
         "custom",
-        path=path,
+        path=model_path,
         force_reload=False
     )
 
-    # 🔥 VERY LOW CONFIDENCE → FORCE DETECTION
     model.conf = 0.05
-
     return model
 
 # =====================================
-# DETECTION (YOLO BUILT-IN RENDER)
+# DETECTION
 # =====================================
 def detect(model, image):
-
     results = model(image)
-
-    # 🔥 YOLO draws boxes (clean & accurate)
     rendered = results.render()[0]
-
     output_img = Image.fromarray(rendered)
-
     df = results.pandas().xyxy[0]
-
     return output_img, df
 
 # =====================================
@@ -87,11 +75,16 @@ if uploaded_file:
         st.subheader("Input Image")
         st.image(image, use_container_width=True)
 
-    # -------- YOUR SAME PATHS --------
+    # ✅ FIXED PATHS (IMPORTANT)
     if option == "Bare PCB Inspection":
-        model_path = r"C:\Users\bambo\OneDrive\Desktop\Desktop\MiniProject\BarePcb-stage\Work Done\yolov5-(good accuarcy)\bestt.pt"
+        model_path = "best_bare.pt"   # rename your file like this
     else:
-        model_path = r"C:\Users\bambo\OneDrive\Desktop\Desktop\MiniProject\Soldering-stage\Work Done\Soldering (good accuarcy)\weights\best.pt"
+        model_path = "best_solder.pt" # rename your file like this
+
+    # DEBUG CHECK
+    if not os.path.exists(model_path):
+        st.error(f"❌ {model_path} not found in repo")
+        st.stop()
 
     model = load_model(model_path)
 
@@ -104,14 +97,13 @@ if uploaded_file:
 
     st.markdown("---")
 
-    # -------- RESULTS --------
     if len(df) == 0:
-        st.warning("⚠️ Model is not confident, but system is working")
+        st.warning("⚠️ No defects detected (or low confidence)")
     else:
         st.dataframe(df)
         st.success(f"🔥 Total Detections: {len(df)}")
 
-    # -------- DOWNLOAD --------
+    # DOWNLOAD
     output.save("pcb_result.jpg")
     with open("pcb_result.jpg", "rb") as f:
         st.download_button("Download Result", f, "pcb_result.jpg")
