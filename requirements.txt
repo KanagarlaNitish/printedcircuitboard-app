@@ -1,8 +1,5 @@
 streamlit
 torch
-torchvision
 numpy
 pandas
 Pillow
-matplotlib
-git+https://github.com/ultralytics/yolov5.git
