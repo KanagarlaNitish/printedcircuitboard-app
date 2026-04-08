@@ -77,9 +77,9 @@ if uploaded_file:
 
     # ✅ FIXED PATHS (IMPORTANT)
     if option == "Bare PCB Inspection":
-        model_path = "best_bare.pt"   # rename your file like this
+        model_path = "best.pt"   # rename your file like this
     else:
-        model_path = "best_solder.pt" # rename your file like this
+        model_path = "bestt.pt" # rename your file like this
 
     # DEBUG CHECK
     if not os.path.exists(model_path):
