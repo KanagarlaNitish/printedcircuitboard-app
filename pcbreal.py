@@ -3,10 +3,10 @@ import torch
 from PIL import Image
 import pandas as pd
 import os
+from yolov5 import load
 
 # -------- PAGE --------
 st.set_page_config(page_title="AI PCB Inspector", layout="wide")
-
 st.title("🧠 AI PCB DEFECT INSPECTOR")
 
 # -------- SIDEBAR --------
@@ -19,7 +19,7 @@ option = st.sidebar.selectbox(
 uploaded_file = st.file_uploader("Upload PCB Image", type=["jpg","png","jpeg"])
 
 # =====================================
-# LOAD MODEL (YOLOv5 - STABLE)
+# LOAD MODEL (FAST + STABLE)
 # =====================================
 @st.cache_resource
 def load_model(model_path):
@@ -28,14 +28,7 @@ def load_model(model_path):
         st.error(f"❌ Model not found: {model_path}")
         st.stop()
 
-    model = torch.hub.load(
-        'ultralytics/yolov5',
-        'custom',
-        path=model_path,
-        force_reload=False
-    )
-
-    model.conf = 0.25
+    model = load(model_path)   # 🔥 LOCAL LOAD (NO INTERNET)
     return model
 
 # =====================================
@@ -45,7 +38,7 @@ def detect(model, image):
 
     results = model(image)
 
-    results.render()  # draw boxes
+    results.render()
     output_img = Image.fromarray(results.ims[0])
 
     df = results.pandas().xyxy[0]
@@ -67,12 +60,15 @@ if uploaded_file is not None:
 
     # -------- MODEL PATH --------
     if option == "Bare PCB Inspection":
-        model_path = "bestt.pt"
+        model_path = "best_bare.pt"
     else:
-        model_path = "best.pt"
+        model_path = "best_solder.pt"
 
-    model = load_model(model_path)
+    # LOAD MODEL
+    with st.spinner("🚀 Loading model (first time ~10 sec)..."):
+        model = load_model(model_path)
 
+    # BUTTON (IMPORTANT)
     if st.button("Run Detection"):
 
         with st.spinner("🔍 Detecting defects..."):
