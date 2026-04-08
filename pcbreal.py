@@ -1,25 +1,20 @@
 import streamlit as st
-import torch
+from ultralytics import YOLO
 from PIL import Image
 import pandas as pd
 import os
 
-# -------- PAGE --------
 st.set_page_config(page_title="AI PCB Inspector", layout="wide")
 st.title("🧠 AI PCB DEFECT INSPECTOR")
 
-# -------- SIDEBAR --------
 option = st.sidebar.selectbox(
     "Inspection Stage",
     ["Bare PCB Inspection", "Soldering Stage Inspection"]
 )
 
-# -------- UPLOAD --------
 uploaded_file = st.file_uploader("Upload PCB Image", type=["jpg","png","jpeg"])
 
-# =====================================
-# LOAD MODEL (PURE TORCH - NO INTERNET)
-# =====================================
+# LOAD MODEL
 @st.cache_resource
 def load_model(model_path):
 
@@ -27,28 +22,27 @@ def load_model(model_path):
         st.error(f"❌ Model not found: {model_path}")
         st.stop()
 
-    model = torch.load(model_path, map_location="cpu")
-    model.eval()
+    model = YOLO(model_path)
     return model
 
-# =====================================
-# SIMPLE DETECTION (SAFE FALLBACK)
-# =====================================
+# DETECT
 def detect(model, image):
 
-    # Convert image to tensor
-    img = image.resize((640, 640))
-    img = torch.tensor(list(img.getdata())).float()
-    img = img.reshape(1, 640, 640, 3).permute(0, 3, 1, 2)
+    results = model(image)
 
-    with torch.no_grad():
-        outputs = model(img)
+    plotted = results[0].plot()
+    output_img = Image.fromarray(plotted)
 
-    return image, pd.DataFrame({"status": ["Model executed"]})
+    boxes = results[0].boxes
+    if boxes is None:
+        return output_img, pd.DataFrame()
 
-# =====================================
+    data = boxes.data.cpu().numpy()
+    df = pd.DataFrame(data, columns=["x1","y1","x2","y2","confidence","class"])
+
+    return output_img, df
+
 # MAIN
-# =====================================
 if uploaded_file is not None:
 
     image = Image.open(uploaded_file).convert("RGB")
@@ -64,16 +58,19 @@ if uploaded_file is not None:
     else:
         model_path = "best.pt"
 
-    with st.spinner("🚀 Loading model..."):
-        model = load_model(model_path)
+    model = load_model(model_path)
 
     if st.button("Run Detection"):
 
-        with st.spinner("🔍 Processing..."):
+        with st.spinner("🔍 Detecting..."):
             output, df = detect(model, image)
 
         with col2:
             st.subheader("Output")
             st.image(output, use_container_width=True)
 
-        st.success("✅ Model ran successfully")
+        if df.empty:
+            st.warning("No defects detected")
+        else:
+            st.dataframe(df)
+            st.success(f"Detections: {len(df)}")
